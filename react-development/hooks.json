@@ -1,5 +1,19 @@
 {
   "hooks": {
+    "OnPluginInstall": [
+      {
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
+        "description": "Install and verify required dependencies (prettier, typescript, typescript-language-server, eslint)"
+      }
+    ],
+    "OnPluginUninstall": [
+      {
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/uninstall.sh",
+        "description": "Remove global npm packages and configuration files"
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
