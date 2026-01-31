@@ -1,35 +1,20 @@
 {
+  "name": "dev-tools",
+  "owner": {
+    "name": "Hans Eilers"
+  },
+  "metadata": {
+    "description": "Development tools and utilities for React projects"
+  },
   "plugins": [
     {
-      "id": "react-development",
-      "name": "React Development",
+      "name": "react-development",
       "description": "A comprehensive Claude plugin for enhancing React development with automated code quality tools and 57 best practice guidelines.",
       "version": "0.0.1",
-      "author": "Hans Eilers",
-      "path": "./react-development",
-      "features": [
-        "Auto-linting with ESLint",
-        "Auto-formatting with Prettier",
-        "TypeScript Language Server support",
-        "57 React best practice rules",
-        "Automatic dependency installation"
-      ],
-      "tools": [
-        "Prettier (code formatter)",
-        "ESLint (JavaScript linter)",
-        "TypeScript (type checking)",
-        "TypeScript Language Server (IDE features)"
-      ],
-      "keywords": [
-        "react",
-        "javascript",
-        "typescript",
-        "linting",
-        "formatting",
-        "best-practices",
-        "performance",
-        "optimization"
-      ]
+      "author": {
+        "name": "Hans Eilers"
+      },
+      "source": "./react-development"
     }
   ]
 }
