@@ -1,0 +1,17 @@
+{
+  "name": "react-development-plugin",
+  "version": "0.0.1",
+  "description": "Claude plugin with tools for enhancing React development with formatting and best practices",
+  "author": "Hans Eilers",
+  "scripts": {
+    "setup": "./scripts/setup.sh"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^7.0.0",
+    "typescript-language-server": "^4.0.0"
+  }
+}

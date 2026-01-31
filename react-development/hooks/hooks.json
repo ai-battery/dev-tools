@@ -1,0 +1,23 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/lint-typescript.sh",
+            "args": ["${CLAUDE_TOOL_OUTPUT_FILE}"],
+            "description": "Lint TypeScript/JavaScript files using ESLint"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/format-typescript.sh",
+            "args": ["${CLAUDE_TOOL_OUTPUT_FILE}"],
+            "description": "Auto-format TypeScript/JavaScript files using Prettier"
+          }
+        ]
+      }
+    ]
+  }
+}

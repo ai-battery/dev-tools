@@ -1,0 +1,25 @@
+{
+  "name": "React development",
+  "description": "Plugin with tools for enhancing react development",
+  "version": "0.0.1",
+  "author": {
+    "name": "Hans Eilers"
+  },
+  "dependencies": {
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^7.0.0",
+    "typescript-language-server": "^4.0.0"
+  },
+  "hooks": {
+    "OnPluginInstall": [
+      {
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
+        "description": "Install and verify required dependencies (prettier, typescript)"
+      }
+    ]
+  }
+}
