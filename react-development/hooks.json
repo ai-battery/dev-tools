@@ -16,7 +16,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "(Write|Edit|MultiEdit) && file_path =~ /\\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/",
         "hooks": [
           {
             "type": "command",

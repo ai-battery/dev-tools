@@ -23,6 +23,39 @@ log_message() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$SETUP_LOG"
 }
 
+# Function to check version
+check_version() {
+  local current=$1
+  local minimum=$2
+  local name=$3
+
+  # Simple version comparison (assumes semantic versioning)
+  current_major=$(echo "$current" | cut -d. -f1 | sed 's/[^0-9]//g')
+  minimum_major=$(echo "$minimum" | cut -d. -f1)
+
+  if [ "$current_major" -lt "$minimum_major" ]; then
+    log_message "WARNING: $name version $current is below minimum $minimum"
+    return 1
+  fi
+  return 0
+}
+
+# Function to install global package with fallback
+install_global_package() {
+  local package=$1
+  if ! npm install --global "$package" 2>&1 | tee -a "$SETUP_LOG"; then
+    log_message "WARNING: Global install failed. Trying with --prefix..."
+    mkdir -p "${PLUGIN_ROOT}/.npm-global"
+    export PATH="${PLUGIN_ROOT}/.npm-global/bin:$PATH"
+    npm config set prefix "${PLUGIN_ROOT}/.npm-global"
+    npm install --global "$package" || {
+      log_message "ERROR: Could not install $package"
+      log_message "Please run: npm config set prefix ~/.npm-global"
+      return 1
+    }
+  fi
+}
+
 # Check for Node.js
 log_message "Checking for Node.js..."
 if ! command_exists node; then
@@ -63,9 +96,10 @@ log_message "Checking for Prettier..."
 if command_exists prettier; then
   PRETTIER_VERSION=$(prettier --version)
   log_message "✓ Prettier is already installed: $PRETTIER_VERSION"
+  check_version "$PRETTIER_VERSION" "2.8.0" "Prettier"
 else
   log_message "Installing Prettier (global fallback)..."
-  npm install --global prettier@latest
+  install_global_package "prettier@latest"
   log_message "✓ Prettier installed: $(prettier --version)"
 fi
 
@@ -74,9 +108,10 @@ log_message "Checking for TypeScript..."
 if command_exists tsc; then
   TS_VERSION=$(tsc --version)
   log_message "✓ TypeScript is already installed: $TS_VERSION"
+  check_version "$TS_VERSION" "4.9.0" "TypeScript"
 else
   log_message "Installing TypeScript (global fallback)..."
-  npm install --global typescript@latest
+  install_global_package "typescript@latest"
   log_message "✓ TypeScript installed: $(tsc --version)"
 fi
 
@@ -85,9 +120,10 @@ log_message "Checking for ESLint..."
 if command_exists eslint; then
   ESLINT_VERSION=$(eslint --version)
   log_message "✓ ESLint is already installed: $ESLINT_VERSION"
+  check_version "$ESLINT_VERSION" "8.0.0" "ESLint"
 else
   log_message "Installing ESLint and related packages (global fallback)..."
-  npm install --global eslint@latest @typescript-eslint/parser@latest @typescript-eslint/eslint-plugin@latest eslint-config-prettier@latest
+  install_global_package "eslint@latest @typescript-eslint/parser@latest @typescript-eslint/eslint-plugin@latest eslint-config-prettier@latest"
   log_message "✓ ESLint installed: $(eslint --version)"
 fi
 

@@ -1,6 +1,6 @@
 ---
-name: vercel-react-best-practices
-description: React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.
+name: react-best-practices
+description: React and Next.js performance optimization guidelines from Vercel Engineering. Contains 57 rules for automated refactoring and code generation. Invoke this skill manually when you need guidance on React/Next.js best practices, performance optimization, or code review.
 license: MIT
 metadata:
   author: vercel
@@ -11,14 +11,30 @@ metadata:
 
 Comprehensive performance optimization guide for React and Next.js applications, maintained by Vercel. Contains 57 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
 
-## When to Apply
+## How to Activate
 
-Reference these guidelines when:
+This skill must be **invoked manually** by the user or agent. It does not automatically trigger.
+
+Invoke this skill when:
 - Writing new React components or Next.js pages
 - Implementing data fetching (client or server-side)
 - Reviewing code for performance issues
 - Refactoring existing React/Next.js code
 - Optimizing bundle size or load times
+
+## Loading Rules
+
+**For waterfall elimination (CRITICAL)**:
+- MANDATORY - READ: `rules/async-parallel.md`, `rules/async-defer-await.md`
+
+**For bundle optimization (CRITICAL)**:
+- MANDATORY - READ: `rules/bundle-barrel-imports.md`, `rules/bundle-dynamic-imports.md`
+
+**For general optimization**:
+- DO NOT load individual rules. Reference `AGENTS.md` for comprehensive guide.
+
+**For specific issues**:
+- Load individual rule files only when addressing that specific pattern.
 
 ## Rule Categories by Priority
 

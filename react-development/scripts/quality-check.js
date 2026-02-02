@@ -31,7 +31,7 @@ const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.join(__dirname, '..');
  */
 class TypeScriptConfigCache {
   constructor() {
-    this.cacheFile = path.join(pluginRoot, '.tsconfig-cache.json');
+    this.cacheFile = path.join(projectRoot, '.tsconfig-cache.json');
     this.cache = { hashes: {}, mappings: {} };
     this.loadCache();
   }
@@ -47,27 +47,20 @@ class TypeScriptConfigCache {
 
   findTsConfigFiles() {
     const configs = [];
-    try {
-      const globSync = require('glob').sync;
-      return globSync('tsconfig*.json', { cwd: projectRoot }).map((file) =>
-        path.join(projectRoot, file)
-      );
-    } catch (e) {
-      const commonConfigs = [
-        'tsconfig.json',
-        'tsconfig.app.json',
-        'tsconfig.node.json',
-        'tsconfig.test.json',
-      ];
+    const commonConfigs = [
+      'tsconfig.json',
+      'tsconfig.app.json',
+      'tsconfig.node.json',
+      'tsconfig.test.json',
+    ];
 
-      for (const config of commonConfigs) {
-        const configPath = path.join(projectRoot, config);
-        if (require('fs').existsSync(configPath)) {
-          configs.push(configPath);
-        }
+    for (const config of commonConfigs) {
+      const configPath = path.join(projectRoot, config);
+      if (require('fs').existsSync(configPath)) {
+        configs.push(configPath);
       }
-      return configs;
     }
+    return configs;
   }
 
   isValid() {
@@ -87,11 +80,12 @@ class TypeScriptConfigCache {
   rebuild() {
     this.cache = { hashes: {}, mappings: {} };
 
+    // Process from general to specific (base config first)
     const configPriority = [
-      'tsconfig.app.json',
-      'tsconfig.node.json',
+      'tsconfig.json',        // Base config first
       'tsconfig.test.json',
-      'tsconfig.json',
+      'tsconfig.node.json',
+      'tsconfig.app.json',    // Most specific last
     ];
 
     configPriority.forEach((configName) => {
@@ -151,7 +145,7 @@ class TypeScriptConfigCache {
     const sortedMappings = Object.entries(this.cache.mappings).sort(([a], [b]) => {
       const aSpecificity = a.split('/').length + (a.includes('**') ? 0 : 10);
       const bSpecificity = b.split('/').length + (b.includes('**') ? 0 : 10);
-      return bSpecificity - aSpecificity;
+      return bSpecificity - aSpecificity; // More specific (higher score) checked first
     });
 
     for (const [pattern, mapping] of sortedMappings) {
@@ -206,6 +200,55 @@ class TypeScriptConfigCache {
 }
 
 const tsConfigCache = new TypeScriptConfigCache();
+
+/**
+ * File locking mechanism to prevent race conditions
+ * when multiple hooks run in parallel on the same file
+ */
+class FileLock {
+  constructor(filePath) {
+    this.lockPath = `${filePath}.quality-check.lock`;
+    this.maxAge = 30000; // 30 seconds
+  }
+
+  async acquire() {
+    try {
+      const lockInfo = JSON.stringify({ pid: process.pid, timestamp: Date.now() });
+      await fs.writeFile(this.lockPath, lockInfo, { flag: 'wx' });
+      return true;
+    } catch (e) {
+      if (e.code === 'EEXIST') {
+        // Check if lock is stale
+        try {
+          const lockData = await fs.readFile(this.lockPath, 'utf8');
+          const lock = JSON.parse(lockData);
+          if (Date.now() - lock.timestamp > this.maxAge) {
+            await fs.unlink(this.lockPath);
+            return this.acquire();
+          }
+          return false; // Active lock
+        } catch {
+          // Lock file corrupted, remove and retry
+          try {
+            await fs.unlink(this.lockPath);
+            return this.acquire();
+          } catch {
+            return false;
+          }
+        }
+      }
+      throw e;
+    }
+  }
+
+  async release() {
+    try {
+      await fs.unlink(this.lockPath);
+    } catch (e) {
+      // Lock already gone
+    }
+  }
+}
 
 // ANSI color codes
 const colors = {
@@ -280,6 +323,8 @@ function loadConfig() {
 
 const config = loadConfig();
 
+// Logging: All logs go to stderr for Claude Code hooks compliance
+// Claude reads stdout for structured data, stderr for human-readable diagnostics
 const log = {
   info: (msg) => console.error(`${colors.blue}[INFO]${colors.reset} ${msg}`),
   error: (msg) => console.error(`${colors.red}[ERROR]${colors.reset} ${msg}`),
@@ -429,7 +474,12 @@ class QualityChecker {
 
       const editedFileDiagnostics = diagnosticsByFile.get(this.filePath) || [];
       if (editedFileDiagnostics.length > 0) {
-        this.errors.push(`TypeScript errors in edited file (using ${path.basename(configPath)})`);
+        this.errors.push({
+          message: `TypeScript errors in edited file (using ${path.basename(configPath)})`,
+          isBlocking: true,
+          source: 'typescript',
+          filePath: this.filePath
+        });
         editedFileDiagnostics.forEach((diagnostic) => {
           const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
           const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(
@@ -496,16 +546,31 @@ class QualityChecker {
             if (config.autofixSilent) {
               this.autofixes.push('ESLint auto-fixed formatting/style issues');
             } else {
-              this.errors.push('ESLint issues were auto-fixed - verify the changes');
+              this.errors.push({
+                message: 'ESLint issues were auto-fixed - verify the changes',
+                isBlocking: false,
+                source: 'eslint',
+                filePath: this.filePath
+              });
             }
           } else {
-            this.errors.push(`ESLint found issues that couldn't be auto-fixed in ${this.filePath}`);
+            this.errors.push({
+              message: `ESLint found issues that couldn't be auto-fixed in ${this.filePath}`,
+              isBlocking: true,
+              source: 'eslint',
+              filePath: this.filePath
+            });
             const formatter = await eslint.loadFormatter('stylish');
             const output = await formatter.format(resultsAfterFix);
             console.error(output);
           }
         } else {
-          this.errors.push(`ESLint found issues in ${this.filePath}`);
+          this.errors.push({
+            message: `ESLint found issues in ${this.filePath}`,
+            isBlocking: true,
+            source: 'eslint',
+            filePath: this.filePath
+          });
           const formatter = await eslint.loadFormatter('stylish');
           const output = await formatter.format(results);
           console.error(output);
@@ -547,10 +612,20 @@ class QualityChecker {
           if (config.autofixSilent) {
             this.autofixes.push('Prettier auto-formatted the file');
           } else {
-            this.errors.push('Prettier formatting was auto-fixed - verify the changes');
+            this.errors.push({
+              message: 'Prettier formatting was auto-fixed - verify the changes',
+              isBlocking: false,
+              source: 'prettier',
+              filePath: this.filePath
+            });
           }
         } else {
-          this.errors.push(`Prettier formatting issues in ${this.filePath}`);
+          this.errors.push({
+            message: `Prettier formatting issues in ${this.filePath}`,
+            isBlocking: true,
+            source: 'prettier',
+            filePath: this.filePath
+          });
           console.error('Run prettier --write to fix');
         }
       } else {
@@ -582,7 +657,12 @@ class QualityChecker {
               asAnyRule.message || 'Prefer proper types or "as unknown" for type assertions';
 
             if (severity === 'error') {
-              this.errors.push(`Found 'as any' usage in ${this.filePath} - ${message}`);
+              this.errors.push({
+                message: `Found 'as any' usage in ${this.filePath} - ${message}`,
+                isBlocking: true,
+                source: 'custom',
+                filePath: this.filePath
+              });
               console.error(`  Line ${index + 1}: ${line.trim()}`);
               foundIssues = true;
             } else {
@@ -598,7 +678,7 @@ class QualityChecker {
 
       if (!allowConsole) {
         const allowedPaths = consoleRule.allowIn?.paths || [];
-        const allowedFileTypes = consoleRule.allowIn?.fileTypes || ['test', 'component'];
+        const allowedFileTypes = consoleRule.allowIn?.fileTypes || ['test'];
         const allowedPatterns = consoleRule.allowIn?.patterns || [];
 
         if (allowedPaths.some((p) => this.filePath.includes(p))) {
@@ -620,7 +700,12 @@ class QualityChecker {
             const message = consoleRule.message || 'Consider removing console statements';
 
             if (severity === 'error') {
-              this.errors.push(`Found console statements in ${this.filePath} - ${message}`);
+              this.errors.push({
+                message: `Found console statements in ${this.filePath} - ${message}`,
+                isBlocking: true,
+                source: 'custom',
+                filePath: this.filePath
+              });
               console.error(`  Line ${index + 1}: ${line.trim()}`);
               foundIssues = true;
             } else {
@@ -633,7 +718,12 @@ class QualityChecker {
       // Check for debugger statements
       lines.forEach((line, index) => {
         if (/\bdebugger\b/.test(line) && !line.trim().startsWith('//')) {
-          this.errors.push(`Found debugger statement in ${this.filePath} - Remove before committing`);
+          this.errors.push({
+            message: `Found debugger statement in ${this.filePath} - Remove before committing`,
+            isBlocking: true,
+            source: 'custom',
+            filePath: this.filePath
+          });
           console.error(`  Line ${index + 1}: ${line.trim()}`);
           foundIssues = true;
         }
@@ -646,10 +736,10 @@ class QualityChecker {
         }
       });
 
-      // React-specific checks
-      if (this.fileType === 'component' || this.fileType === 'hook') {
-        await this.checkReactPatterns(content, lines);
-      }
+      // React-specific checks removed
+      // NOTE: Proper React hook validation (useEffect dependency arrays, etc.)
+      // requires AST parsing. Regex-based detection is too unreliable and produces
+      // false positives/negatives. Use ESLint with react-hooks plugin instead.
 
       if (!foundIssues) {
         log.success('No common issues found');
@@ -657,60 +747,6 @@ class QualityChecker {
     } catch (error) {
       log.debug(`Common issues check error: ${error.message}`);
     }
-  }
-
-  async checkReactPatterns(content, lines) {
-    // Check for missing dependency arrays in useEffect/useCallback/useMemo
-    const hookRegex = /\b(useEffect|useCallback|useMemo)\s*\(\s*(?:async\s*)?\([^)]*\)\s*=>/g;
-    let match;
-    while ((match = hookRegex.exec(content)) !== null) {
-      const hookName = match[1];
-      const position = match.index;
-      const lineNumber = content.substring(0, position).split('\n').length;
-      
-      // Check if there's a dependency array (simplified check)
-      const afterHook = content.substring(position + match[0].length);
-      const closingIndex = this.findClosingBracket(afterHook);
-      if (closingIndex > -1) {
-        const hookBody = afterHook.substring(0, closingIndex + 1);
-        // Look for the dependency array after the function body
-        const afterBody = afterHook.substring(closingIndex + 1).trim();
-        if (!afterBody.startsWith(',') && !afterBody.startsWith(')')) {
-          log.warning(`${hookName} at line ${lineNumber} might be missing dependency array`);
-        }
-      }
-    }
-  }
-
-  findClosingBracket(str) {
-    let depth = 0;
-    let inString = false;
-    let stringChar = '';
-
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      const prevChar = i > 0 ? str[i - 1] : '';
-
-      if (inString) {
-        if (char === stringChar && prevChar !== '\\') {
-          inString = false;
-        }
-        continue;
-      }
-
-      if (char === '"' || char === "'" || char === '`') {
-        inString = true;
-        stringChar = char;
-        continue;
-      }
-
-      if (char === '{' || char === '(') depth++;
-      if (char === '}' || char === ')') {
-        depth--;
-        if (depth === 0) return i;
-      }
-    }
-    return -1;
   }
 
   async suggestRelatedTests() {
@@ -829,15 +865,26 @@ function printSummary(errors, autofixes) {
   if (errors.length > 0) {
     console.error(`\n${colors.blue}═══ Quality Check Summary ═══${colors.reset}`);
     errors.forEach((error) => {
-      console.error(`${colors.red}❌${colors.reset} ${error}`);
+      const message = typeof error === 'string' ? error : error.message;
+      console.error(`${colors.red}❌${colors.reset} ${message}`);
     });
 
-    console.error(
-      `\n${colors.red}Found ${errors.length} issue(s) that MUST be fixed!${colors.reset}`
-    );
-    console.error(`${colors.red}════════════════════════════════════════════${colors.reset}`);
-    console.error(`${colors.red}❌ ALL ISSUES ARE BLOCKING ❌${colors.reset}`);
-    console.error(`${colors.red}════════════════════════════════════════════${colors.reset}`);
+    const blockingErrors = errors.filter(e => typeof e === 'object' && e.isBlocking);
+    const nonBlockingErrors = errors.filter(e => typeof e === 'object' && !e.isBlocking);
+
+    if (blockingErrors.length > 0) {
+      console.error(
+        `\n${colors.red}Found ${blockingErrors.length} blocking issue(s) that MUST be fixed!${colors.reset}`
+      );
+      console.error(`${colors.red}════════════════════════════════════════════${colors.reset}`);
+      console.error(`${colors.red}❌ BLOCKING ISSUES MUST BE RESOLVED ❌${colors.reset}`);
+      console.error(`${colors.red}════════════════════════════════════════════${colors.reset}`);
+    }
+    if (nonBlockingErrors.length > 0) {
+      console.error(
+        `\n${colors.yellow}Found ${nonBlockingErrors.length} non-blocking issue(s) (review recommended)${colors.reset}`
+      );
+    }
   }
 }
 
@@ -873,43 +920,49 @@ async function main() {
   console.error('────────────────────────────────────────────');
   log.info(`Checking: ${filePath}`);
 
-  const checker = new QualityChecker(filePath);
-  const { errors, autofixes } = await checker.checkAll();
+  // Acquire file lock to prevent race conditions
+  const lock = new FileLock(filePath);
+  const lockAcquired = await lock.acquire();
 
-  printSummary(errors, autofixes);
+  if (!lockAcquired) {
+    log.warning('Another quality check is running on this file. Skipping...');
+    console.error(`\n${colors.yellow}⏭️  Skipped - another check in progress${colors.reset}`);
+    process.exit(0);
+  }
 
-  const editedFileErrors = errors.filter(
-    (e) =>
-      e.includes('edited file') ||
-      e.includes('ESLint found issues') ||
-      e.includes('Prettier formatting issues') ||
-      e.includes('console statements') ||
-      e.includes("'as any' usage") ||
-      e.includes('debugger statement') ||
-      e.includes('were auto-fixed')
-  );
+  try {
+    const checker = new QualityChecker(filePath);
+    const { errors, autofixes } = await checker.checkAll();
 
-  if (editedFileErrors.length > 0) {
-    console.error(`\n${colors.red}🛑 FAILED - Fix issues in your edited file! 🛑${colors.reset}`);
-    console.error(`${colors.yellow}📋 NEXT STEPS:${colors.reset}`);
-    console.error(`${colors.yellow}   1. Fix the issues listed above${colors.reset}`);
-    console.error(`${colors.yellow}   2. The hook will run again automatically${colors.reset}`);
-    process.exit(2);
-  } else {
-    console.error(
-      `\n${colors.green}✅ Quality check passed for ${path.basename(filePath)}${colors.reset}`
-    );
+    printSummary(errors, autofixes);
 
-    if (autofixes.length > 0 && config.autofixSilent) {
-      console.error(
-        `\n${colors.yellow}👉 File quality verified. Auto-fixes applied. Continue with your task.${colors.reset}`
-      );
+    // Check for blocking errors using metadata
+    const blockingErrors = errors.filter(e => typeof e === 'object' && e.isBlocking);
+
+    if (blockingErrors.length > 0) {
+      console.error(`\n${colors.red}🛑 FAILED - Fix issues in your edited file! 🛑${colors.reset}`);
+      console.error(`${colors.yellow}📋 NEXT STEPS:${colors.reset}`);
+      console.error(`${colors.yellow}   1. Fix the issues listed above${colors.reset}`);
+      console.error(`${colors.yellow}   2. The hook will run again automatically${colors.reset}`);
+      process.exit(2);
     } else {
       console.error(
-        `\n${colors.yellow}👉 File quality verified. Continue with your task.${colors.reset}`
+        `\n${colors.green}✅ Quality check passed for ${path.basename(filePath)}${colors.reset}`
       );
+
+      if (autofixes.length > 0 && config.autofixSilent) {
+        console.error(
+          `\n${colors.yellow}👉 File quality verified. Auto-fixes applied. Continue with your task.${colors.reset}`
+        );
+      } else {
+        console.error(
+          `\n${colors.yellow}👉 File quality verified. Continue with your task.${colors.reset}`
+        );
+      }
+      process.exit(0);
     }
-    process.exit(0);
+  } finally {
+    await lock.release();
   }
 }
 

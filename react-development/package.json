@@ -1,18 +1,27 @@
 {
-  "name": "react-development-plugin",
+  "name": "react-development",
   "version": "0.0.1",
-  "description": "Claude plugin with tools for enhancing React development with formatting and best practices",
+  "description": "React development plugin with automated quality checks",
   "author": "Hans Eilers",
   "scripts": {
-    "setup": "./scripts/setup.sh",
-    "uninstall": "./scripts/uninstall.sh"
+    "setup": "bash scripts/setup.sh",
+    "uninstall": "bash scripts/uninstall.sh"
   },
-  "devDependencies": {
-    "eslint": "^8.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "prettier": "^3.0.0",
-    "typescript": "^5.0.0",
-    "typescript-eslint": "^7.0.0",
-    "typescript-language-server": "^4.0.0"
-  }
+  "peerDependencies": {
+    "typescript": ">=4.9.0",
+    "eslint": ">=8.0.0",
+    "prettier": ">=2.8.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": false
+    },
+    "eslint": {
+      "optional": false
+    },
+    "prettier": {
+      "optional": false
+    }
+  },
+  "note": "Dependencies should be installed globally or in your project. Run 'npm run setup' to install global fallbacks."
 }
