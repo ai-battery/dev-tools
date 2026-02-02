@@ -4,7 +4,7 @@
       {
         "type": "command",
         "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
-        "description": "Install and verify required dependencies (prettier, typescript, typescript-language-server, eslint)"
+        "description": "Install and verify required dependencies (prettier, typescript, eslint)"
       }
     ],
     "OnPluginUninstall": [
@@ -16,19 +16,12 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/lint-typescript.sh",
-            "args": ["${CLAUDE_TOOL_OUTPUT_FILE}"],
-            "description": "Lint TypeScript/JavaScript files using ESLint"
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/format-typescript.sh",
-            "args": ["${CLAUDE_TOOL_OUTPUT_FILE}"],
-            "description": "Auto-format TypeScript/JavaScript files using Prettier"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/quality-check.js",
+            "description": "Run unified quality checks: TypeScript compilation, ESLint, Prettier, and React patterns"
           }
         ]
       }
