@@ -1,0 +1,9 @@
+{
+  "name": "setup-environment",
+  "description": "Plugin for setting up development environments",
+  "version": "0.0.1",
+  "author": {
+    "name": "Hans Eilers"
+  },
+  "hooks": "../hooks.json"
+}
