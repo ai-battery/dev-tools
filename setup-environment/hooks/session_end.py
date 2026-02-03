@@ -7,10 +7,13 @@
 # ///
 
 import argparse
-import json
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, iso_now, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -21,30 +24,10 @@ except ImportError:
 
 def log_session_end(input_data):
     """Log session end event to logs directory."""
-    # Ensure logs directory exists
-    log_dir = Path("logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / 'session_end.json'
-
-    # Read existing log data or initialize empty list
-    if log_file.exists():
-        with open(log_file, 'r') as f:
-            try:
-                log_data = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                log_data = []
-    else:
-        log_data = []
-
-    # Add timestamp to the input data
-    input_data['logged_at'] = datetime.now().isoformat()
-
-    # Append the entire input data
-    log_data.append(input_data)
-
-    # Write back to file with formatting
-    with open(log_file, 'w') as f:
-        json.dump(log_data, f, indent=2)
+    log_dir = ensure_log_dir()
+    log_file = log_dir / "session_end.json"
+    input_data["logged_at"] = iso_now()
+    append_json_log(log_file, input_data)
 
 
 def perform_cleanup():
@@ -86,7 +69,9 @@ def main():
         args = parser.parse_args()
 
         # Read JSON input from stdin
-        input_data = json.loads(sys.stdin.read())
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
 
         # Extract session_id for cleanup logging
         session_id = input_data.get('session_id', 'unknown')
@@ -101,33 +86,16 @@ def main():
                 # Log cleanup actions
                 cleanup_log = {
                     "session_id": session_id,
-                    "cleanup_at": datetime.now().isoformat(),
+                    "cleanup_at": iso_now(),
                     "actions": cleanup_actions
                 }
-                log_dir = Path("logs")
+                log_dir = ensure_log_dir()
                 cleanup_file = log_dir / "cleanup.json"
-
-                # Read existing cleanup log
-                if cleanup_file.exists():
-                    with open(cleanup_file, 'r') as f:
-                        try:
-                            cleanup_data = json.load(f)
-                        except (json.JSONDecodeError, ValueError):
-                            cleanup_data = []
-                else:
-                    cleanup_data = []
-
-                cleanup_data.append(cleanup_log)
-
-                with open(cleanup_file, 'w') as f:
-                    json.dump(cleanup_data, f, indent=2)
+                append_json_log(cleanup_file, cleanup_log)
 
         # Success
         sys.exit(0)
 
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)

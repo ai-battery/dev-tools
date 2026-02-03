@@ -12,9 +12,13 @@ import json
 import os
 import sys
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -26,17 +30,13 @@ except ImportError:
 def debug_log(message: str) -> None:
     """Write debug message to logs/subagent_debug.log"""
     try:
-        log_dir = os.path.join(os.getcwd(), "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        debug_path = os.path.join(log_dir, "subagent_debug.log")
+        log_dir = ensure_log_dir()
+        debug_path = log_dir / "subagent_debug.log"
         timestamp = datetime.now().isoformat()
         with open(debug_path, 'a') as f:
             f.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
-
-# Add hooks directory to path for local imports
-sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     from utils.tts.tts_queue import acquire_tts_lock, release_tts_lock, cleanup_stale_locks
@@ -201,33 +201,18 @@ def main() -> None:
         args = parser.parse_args()
 
         # Read JSON input from stdin
-        input_data = json.load(sys.stdin)
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
 
         # Extract required fields (used for logging context)
         _ = input_data.get("session_id", "")
         _ = input_data.get("stop_hook_active", False)
 
         # Ensure log directory exists
-        log_dir = os.path.join(os.getcwd(), "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, "subagent_stop.json")
-
-        # Read existing log data or initialize empty list
-        if os.path.exists(log_path):
-            with open(log_path, 'r') as f:
-                try:
-                    log_data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    log_data = []
-        else:
-            log_data = []
-
-        # Append new data
-        log_data.append(input_data)
-
-        # Write back to file with formatting
-        with open(log_path, 'w') as f:
-            json.dump(log_data, f, indent=2)
+        log_dir = ensure_log_dir()
+        log_path = log_dir / "subagent_stop.json"
+        append_json_log(log_path, input_data)
 
         # Handle --chat switch (same as stop.py)
         if args.chat and 'transcript_path' in input_data:
@@ -246,7 +231,7 @@ def main() -> None:
                                     pass  # Skip invalid lines
 
                     # Write to logs/chat.json
-                    chat_file = os.path.join(log_dir, 'chat.json')
+                    chat_file = log_dir / "chat.json"
                     with open(chat_file, 'w') as f:
                         json.dump(chat_data, f, indent=2)
                 except Exception:
@@ -287,9 +272,6 @@ def main() -> None:
 
         sys.exit(0)
 
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)

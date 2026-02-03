@@ -7,12 +7,15 @@
 # ///
 
 import argparse
-import json
 import os
 import sys
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -23,27 +26,9 @@ except ImportError:
 
 def log_session_start(input_data):
     """Log session start event to logs directory."""
-    # Ensure logs directory exists
-    log_dir = Path("logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / 'session_start.json'
-    
-    # Read existing log data or initialize empty list
-    if log_file.exists():
-        with open(log_file, 'r') as f:
-            try:
-                log_data = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                log_data = []
-    else:
-        log_data = []
-    
-    # Append the entire input data
-    log_data.append(input_data)
-    
-    # Write back to file with formatting
-    with open(log_file, 'w') as f:
-        json.dump(log_data, f, indent=2)
+    log_dir = ensure_log_dir()
+    log_file = log_dir / "session_start.json"
+    append_json_log(log_file, input_data)
 
 
 def get_git_status():
@@ -152,7 +137,9 @@ def main():
         args = parser.parse_args()
         
         # Read JSON input from stdin
-        input_data = json.loads(sys.stdin.read())
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
         
         # Extract fields
         session_id = input_data.get('session_id', 'unknown')
@@ -201,9 +188,6 @@ def main():
         # Success
         sys.exit(0)
         
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)

@@ -12,8 +12,12 @@ import os
 import sys
 import random
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -163,33 +167,18 @@ def main():
         args = parser.parse_args()
         
         # Read JSON input from stdin
-        input_data = json.load(sys.stdin)
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
 
         # Extract required fields
         session_id = input_data.get("session_id", "")
         stop_hook_active = input_data.get("stop_hook_active", False)
 
         # Ensure log directory exists
-        log_dir = os.path.join(os.getcwd(), "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = os.path.join(log_dir, "stop.json")
-
-        # Read existing log data or initialize empty list
-        if os.path.exists(log_path):
-            with open(log_path, 'r') as f:
-                try:
-                    log_data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    log_data = []
-        else:
-            log_data = []
-        
-        # Append new data
-        log_data.append(input_data)
-        
-        # Write back to file with formatting
-        with open(log_path, 'w') as f:
-            json.dump(log_data, f, indent=2)
+        log_dir = ensure_log_dir()
+        log_path = log_dir / "stop.json"
+        append_json_log(log_path, input_data)
         
         # Handle --chat switch
         if args.chat and 'transcript_path' in input_data:
@@ -208,7 +197,7 @@ def main():
                                     pass  # Skip invalid lines
                     
                     # Write to logs/chat.json
-                    chat_file = os.path.join(log_dir, 'chat.json')
+                    chat_file = log_dir / "chat.json"
                     with open(chat_file, 'w') as f:
                         json.dump(chat_data, f, indent=2)
                 except Exception:
@@ -220,9 +209,6 @@ def main():
 
         sys.exit(0)
 
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)

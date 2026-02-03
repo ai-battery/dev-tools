@@ -6,10 +6,12 @@
 # ]
 # ///
 
-import json
 import sys
-from datetime import datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, iso_now, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -21,10 +23,12 @@ except ImportError:
 def main():
     try:
         # Read JSON input from stdin
-        input_data = json.load(sys.stdin)
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
 
         # Add timestamp to the log entry
-        input_data['logged_at'] = datetime.now().isoformat()
+        input_data["logged_at"] = iso_now()
 
         # Extract key fields for enhanced logging
         tool_name = input_data.get('tool_name', 'unknown')
@@ -47,32 +51,12 @@ def main():
         }
 
         # Ensure log directory exists
-        log_dir = Path.cwd() / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / 'post_tool_use_failure.json'
-
-        # Read existing log data or initialize empty list
-        if log_path.exists():
-            with open(log_path, 'r') as f:
-                try:
-                    log_data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    log_data = []
-        else:
-            log_data = []
-
-        # Append new log entry
-        log_data.append(log_entry)
-
-        # Write back to file with formatting
-        with open(log_path, 'w') as f:
-            json.dump(log_data, f, indent=2)
+        log_dir = ensure_log_dir()
+        log_path = log_dir / "post_tool_use_failure.json"
+        append_json_log(log_path, log_entry)
 
         sys.exit(0)
 
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Exit cleanly on any other error
         sys.exit(0)

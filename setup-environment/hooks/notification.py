@@ -7,12 +7,15 @@
 # ///
 
 import argparse
-import json
 import os
 import sys
 import subprocess
 import random
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _shared import append_json_log, ensure_log_dir, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -90,30 +93,13 @@ def main():
         args = parser.parse_args()
         
         # Read JSON input from stdin
-        input_data = json.loads(sys.stdin.read())
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
         
-        # Ensure log directory exists
-        import os
-        log_dir = os.path.join(os.getcwd(), 'logs')
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, 'notification.json')
-        
-        # Read existing log data or initialize empty list
-        if os.path.exists(log_file):
-            with open(log_file, 'r') as f:
-                try:
-                    log_data = json.load(f)
-                except (json.JSONDecodeError, ValueError):
-                    log_data = []
-        else:
-            log_data = []
-        
-        # Append new data
-        log_data.append(input_data)
-        
-        # Write back to file with formatting
-        with open(log_file, 'w') as f:
-            json.dump(log_data, f, indent=2)
+        log_dir = ensure_log_dir()
+        log_file = log_dir / "notification.json"
+        append_json_log(log_file, input_data)
         
         # Announce notification via TTS only if --notify flag is set
         # Skip TTS for the generic "Claude is waiting for your input" message
@@ -122,9 +108,6 @@ def main():
         
         sys.exit(0)
         
-    except json.JSONDecodeError:
-        # Handle JSON decode errors gracefully
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)

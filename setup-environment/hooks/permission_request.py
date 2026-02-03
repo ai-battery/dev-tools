@@ -38,9 +38,13 @@ Output JSON for decision control:
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _security import is_safe_bash_command
+from _shared import append_json_log, ensure_log_dir, read_stdin_json
 
 try:
     from dotenv import load_dotenv
@@ -56,54 +60,6 @@ READ_ONLY_PATTERNS = {
     "Grep": lambda tool_input: True,  # All Grep operations
     "Bash": lambda tool_input: is_safe_bash_command(tool_input.get("command", "")),
 }
-
-# Safe bash commands that can be auto-allowed
-SAFE_BASH_COMMANDS = [
-    r"^ls\b",
-    r"^pwd\b",
-    r"^echo\b",
-    r"^cat\b(?!.*>)",  # cat without redirection
-    r"^head\b",
-    r"^tail\b",
-    r"^wc\b",
-    r"^which\b",
-    r"^whereis\b",
-    r"^type\b",
-    r"^file\b",
-    r"^stat\b",
-    r"^git\s+(status|log|diff|show|branch|tag)\b",
-    r"^git\s+remote\s+-v\b",
-    r"^npm\s+(list|ls|outdated|view)\b",
-    r"^pip\s+(list|show|freeze)\b",
-    r"^uv\s+(pip\s+list|tree)\b",
-    r"^python\s+--version\b",
-    r"^node\s+--version\b",
-    r"^npm\s+--version\b",
-]
-
-
-def is_safe_bash_command(command: str) -> bool:
-    """
-    Check if a bash command is safe (read-only).
-
-    Args:
-        command: The bash command to check
-
-    Returns:
-        True if the command is considered safe/read-only
-    """
-    if not command:
-        return False
-
-    # Normalize command
-    normalized = command.strip()
-
-    # Check against safe patterns
-    for pattern in SAFE_BASH_COMMANDS:
-        if re.search(pattern, normalized):
-            return True
-
-    return False
 
 
 def should_auto_allow(tool_name: str, tool_input: dict) -> bool:
@@ -198,32 +154,10 @@ def create_deny_response(message: str, interrupt: bool = False) -> dict:
     }
 
 
-def log_permission_request(input_data: dict, log_dir: Path):
-    """
-    Log the permission request to a JSON file.
-
-    Args:
-        input_data: The input data from the hook
-        log_dir: Path to the logs directory
-    """
+def log_permission_request(input_data: dict) -> None:
+    log_dir = ensure_log_dir()
     log_path = log_dir / "permission_request.json"
-
-    # Read existing log data or initialize empty list
-    if log_path.exists():
-        with open(log_path, "r") as f:
-            try:
-                log_data = json.load(f)
-            except (json.JSONDecodeError, ValueError):
-                log_data = []
-    else:
-        log_data = []
-
-    # Append new data
-    log_data.append(input_data)
-
-    # Write back to file with formatting
-    with open(log_path, "w") as f:
-        json.dump(log_data, f, indent=2)
+    append_json_log(log_path, input_data)
 
 
 def main():
@@ -245,11 +179,13 @@ def main():
         args = parser.parse_args()
 
         # Read JSON input from stdin
-        input_data = json.load(sys.stdin)
+        input_data = read_stdin_json()
+        if not input_data:
+            sys.exit(0)
 
         # Extract fields
         tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input", {}) or {}
         hook_event_name = input_data.get("hook_event_name", "")
 
         # Verify this is a PermissionRequest event
@@ -257,12 +193,8 @@ def main():
             # Not a PermissionRequest event, exit gracefully
             sys.exit(0)
 
-        # Ensure log directory exists
-        log_dir = Path.cwd() / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-
         # Log the permission request
-        log_permission_request(input_data, log_dir)
+        log_permission_request(input_data)
 
         # If log-only mode, exit without making a decision
         if args.log_only:
@@ -278,9 +210,6 @@ def main():
         # Default: exit without making a decision (let user decide)
         sys.exit(0)
 
-    except json.JSONDecodeError:
-        # Gracefully handle JSON decode errors
-        sys.exit(0)
     except Exception:
         # Handle any other errors gracefully
         sys.exit(0)
