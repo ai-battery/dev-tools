@@ -5,5 +5,5 @@
   "author": {
     "name": "Hans Eilers"
   },
-  "hooks": "../hooks.json"
+  "hooks": "./hooks.json"
 }
