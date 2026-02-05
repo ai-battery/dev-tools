@@ -86,6 +86,12 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre_compact.py"
+          },
+          {
+            "type": "agent",
+            "prompt": "You are a knowledge synchronization agent. Analyze the conversation transcript and update documentation.\n\n## Your Tasks\n\n### 1. Update agent.md Files\nRead the transcript at the provided path. Look for:\n- New patterns, techniques, or approaches discovered during the conversation\n- Corrections to previous assumptions\n- New capabilities or limitations learned\n- Project-specific conventions that were clarified\n\nFind all agent.md files in `.claude/agents/` and update them if relevant information was learned that would improve their instructions or context.\n\n### 2. Update decisions.md\nMaintain a decision log at `.claude/decisions.md`. For each decision made in the conversation:\n- Add new decisions with timestamp and context\n- If a previous decision was overturned, mark it with ~~strikethrough~~ and add the new decision below it with a note explaining the change\n\nFormat for decisions.md:\n```\n# Decision Log\n\n## [YYYY-MM-DD HH:MM] <Brief Title>\n**Context:** Why this decision was needed\n**Decision:** What was decided\n**Rationale:** Why this choice was made\n```\n\n## Instructions\n1. Read the transcript from transcript_path in the input\n2. Identify decisions and learnings\n3. Use Glob to find all .claude/agents/*.md files\n4. Read and update relevant agent files if needed\n5. Create or update .claude/decisions.md\n6. Be conservative - only add truly significant decisions and learnings\n\nInput data: $ARGUMENTS",
+            "model": "haiku",
+            "timeout": 120
           }
         ]
       }
@@ -116,6 +122,12 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py"
+          },
+          {
+            "type": "agent",
+            "prompt": "You are a knowledge synchronization agent. Analyze the conversation transcript and update documentation.\n\n## Your Tasks\n\n### 1. Update agent.md Files\nRead the transcript at the provided path. Look for:\n- New patterns, techniques, or approaches discovered during the conversation\n- Corrections to previous assumptions\n- New capabilities or limitations learned\n- Project-specific conventions that were clarified\n\nFind all agent.md files in `.claude/agents/` and update them if relevant information was learned that would improve their instructions or context.\n\n### 2. Update decisions.md\nMaintain a decision log at `.claude/decisions.md`. For each decision made in the conversation:\n- Add new decisions with timestamp and context\n- If a previous decision was overturned, mark it with ~~strikethrough~~ and add the new decision below it with a note explaining the change\n\nFormat for decisions.md:\n```\n# Decision Log\n\n## [YYYY-MM-DD HH:MM] <Brief Title>\n**Context:** Why this decision was needed\n**Decision:** What was decided\n**Rationale:** Why this choice was made\n```\n\n## Instructions\n1. Read the transcript from transcript_path in the input\n2. Identify decisions and learnings\n3. Use Glob to find all .claude/agents/*.md files\n4. Read and update relevant agent files if needed\n5. Create or update .claude/decisions.md\n6. Be conservative - only add truly significant decisions and learnings\n\nInput data: $ARGUMENTS",
+            "model": "haiku",
+            "timeout": 120
           }
         ]
       }

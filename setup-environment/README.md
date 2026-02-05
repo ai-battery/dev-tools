@@ -4,15 +4,14 @@ A Claude Code plugin for safe, observable environment setup and session lifecycl
 
 ## What It Does
 
-- Adds a full suite of lifecycle hooks (setup, session start/end, tool use, stop).
-- Logs hook events to `logs/*.json` for auditability.
-- Blocks risky operations like destructive `rm -rf` and `.env` access.
-- Supports optional TTS notifications and LLM-powered summaries when configured.
+- Blocks risky operations like destructive `rm -rf` and `.env` access via plugin hooks
+- Logs tool usage to `logs/*.json` for auditability
+- Provides optional native hooks for session lifecycle, notifications, and knowledge sync
 
 ## Structure
 
 - `./.claude-plugin/plugin.json` - plugin manifest
-- `./hooks.json` - hook wiring for Claude Code
+- `./hooks.json` - plugin hook wiring (PreToolUse, PostToolUse, PostToolUseFailure only)
 - `./hooks/` - hook scripts
 - `./hooks/_shared.py` - shared JSON + logging helpers
 - `./hooks/_security.py` - safety checks for tool use
@@ -26,19 +25,72 @@ Use Claude Code's plugin installation flow:
 claude plugin install
 ```
 
-## Hook Behavior
+## Plugin Hooks (Automatic)
 
-Key hooks and their intent:
+These hooks are automatically active when the plugin is installed:
 
-- `Setup` - repository context and optional dependency setup
-- `SessionStart` - capture git status and contextual files
-- `SessionEnd` - cleanup and session-end logging
-- `UserPromptSubmit` - prompt logging and optional naming
-- `PreToolUse` - safety guardrails for `.env` and destructive `rm`
-- `PostToolUse` and `PostToolUseFailure` - audit tool usage and errors
-- `Notification` and `Stop` - optional TTS notifications
-- `SubAgentStart` and `SubAgentStop` - log subagent activity (optional TTS)
-- `PreCompact` - backup transcripts before compaction
+| Hook | Purpose |
+|------|---------|
+| `PreToolUse` | Safety guardrails for `.env` and destructive `rm` commands |
+| `PostToolUse` | Audit successful tool usage |
+| `PostToolUseFailure` | Log tool failures with error details |
+
+## Native Hooks (Optional)
+
+The following hooks require manual configuration in your Claude Code settings. Add them to `~/.claude/settings.json` or `~/.claude/settings.local.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "/path/to/dev-tools/setup-environment/hooks/session_start.py --load-context"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "/path/to/dev-tools/setup-environment/hooks/user_prompt_submit.py --store-last-prompt"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "/path/to/dev-tools/setup-environment/hooks/stop.py"
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "command": "/path/to/dev-tools/setup-environment/hooks/pre_compact.py --backup"
+      }
+    ],
+    "Notification": [
+      {
+        "type": "command",
+        "command": "/path/to/dev-tools/setup-environment/hooks/notification.py"
+      }
+    ]
+  }
+}
+```
+
+Replace `/path/to/dev-tools` with the actual path to your dev-tools directory.
+
+### Native Hook Descriptions
+
+| Hook | Purpose |
+|------|---------|
+| `SessionStart` | Load development context (git status, TODO files) at session start |
+| `UserPromptSubmit` | Log user prompts and manage session data |
+| `Stop` | Log session stop events, optional TTS notifications |
+| `PreCompact` | Backup transcripts before context compaction |
+| `Notification` | Log notifications when agent needs user input |
+
+### Knowledge Synchronization (Advanced)
+
+For automatic knowledge sync on `PreCompact` and `Stop` events, you can add agent-type hooks that update your project documentation. See the hook scripts for the full agent prompt configuration.
 
 ## Configuration
 
@@ -64,7 +116,7 @@ python -m unittest discover -s hooks/tests -p "test_*.py"
 
 ## Version
 
-0.0.1
+0.0.2
 
 ## Author
 
