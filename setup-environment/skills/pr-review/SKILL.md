@@ -22,6 +22,37 @@ git diff --stat && git diff
 
 ## Review Workflow
 
+### Phase 0: Get Changed Files and Line Numbers
+
+Before reviewing, get the list of changed files with their line numbers:
+
+```bash
+# List all changed files
+gh pr diff $PR --name-only
+
+# Get full diff with line numbers (for identifying comment locations)
+gh pr diff $PR
+
+# Get diff for a specific file
+gh pr diff $PR -- path/to/file.ts
+
+# Get structured file changes with line ranges
+gh api repos/$REPO/pulls/$PR/files | jq '.[] | {
+  filename: .filename,
+  status: .status,
+  additions: .additions,
+  deletions: .deletions,
+  patch: .patch
+}'
+```
+
+**Reading the diff output**: Line numbers in `@@` headers show where to place comments:
+```
+@@ -15,6 +15,8 @@  <- Old file started at line 15, new file at line 15
+```
+- Use the RIGHT side line number (after `+`) for commenting on new/modified code
+- Use the LEFT side line number (after `-`) for commenting on deleted code
+
 ### Phase 1: Triage (before reading code)
 
 ```bash
@@ -68,7 +99,106 @@ Why this matters: [impact explanation]
 Suggested fix: [concrete solution or alternative]
 ```
 
-### Phase 3: Submit Review
+### Phase 3: Add Inline Comments
+
+Place comments directly on specific lines in the PR diff. This is the preferred way to give feedback - comments appear exactly where the issue is.
+
+```bash
+# First, get the commit SHA (required for inline comments)
+COMMIT_SHA=$(gh api repos/$REPO/pulls/$PR --jq '.head.sha')
+
+# Single inline comment on a specific line
+gh api repos/$REPO/pulls/$PR/comments \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  -f path="<file-path-from-diff>" \
+  -F line=<line-number> \
+  -f side="RIGHT" \
+  -f body="**[severity]** <your comment based on actual code review>"
+
+# Multi-line comment (for a range of lines)
+gh api repos/$REPO/pulls/$PR/comments \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  -f path="<file-path-from-diff>" \
+  -F start_line=<start-line> \
+  -F line=<end-line> \
+  -f side="RIGHT" \
+  -f body="**[severity]** <your comment about this code block>"
+```
+
+**Required parameters for inline comments:**
+- `commit_id` - The SHA of the PR's head commit
+- `path` - File path relative to repo root (get from `gh pr diff --name-only`)
+- `line` - Line number in the file (get from diff `@@` headers)
+- `side` - `"RIGHT"` for new/modified code, `"LEFT"` for deleted code
+
+```bash
+# Comment on deleted code (use side="LEFT")
+gh api repos/$REPO/pulls/$PR/comments \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  -f path="<file-path-from-diff>" \
+  -F line=<line-number-in-old-file> \
+  -f side="LEFT" \
+  -f body="**[question]** <ask why this code was removed>"
+```
+
+### Phase 4: Submit Review with Multiple Inline Comments
+
+Submit a complete review with multiple inline comments in one API call:
+
+```bash
+# Get commit SHA first
+COMMIT_SHA=$(gh api repos/$REPO/pulls/$PR --jq '.head.sha')
+
+# Submit review with multiple inline comments
+# Replace placeholders with actual file paths, line numbers, and comments from your review
+gh api repos/$REPO/pulls/$PR/reviews \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  --input - <<EOF
+{
+  "body": "## Summary\n<your overall assessment>\n\n## Required Changes\n- <list issues found>",
+  "event": "REQUEST_CHANGES",
+  "comments": [
+    {
+      "path": "<file-path>",
+      "line": <line-number>,
+      "side": "RIGHT",
+      "body": "**[blocking]** <issue description and suggested fix>"
+    },
+    {
+      "path": "<another-file-path>",
+      "line": <line-number>,
+      "side": "RIGHT",
+      "body": "**[suggestion]** <improvement idea>"
+    }
+  ]
+}
+EOF
+
+# For approval
+gh api repos/$REPO/pulls/$PR/reviews \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  --input - <<EOF
+{
+  "body": "## Summary\n<positive assessment>\n\n## Strengths\n- <what's good>\n\nApproved - ready to merge.",
+  "event": "APPROVE",
+  "comments": []
+}
+EOF
+```
+
+**Review events**:
+- `APPROVE` - Approve the PR
+- `REQUEST_CHANGES` - Block until issues fixed
+- `COMMENT` - Neutral feedback, no approval decision
+
+### Phase 5: Quick Review Commands (without inline comments)
+
+For simple approvals/rejections without inline comments:
 
 ```bash
 # Approve
@@ -99,12 +229,17 @@ EOF
 ## Responding to Existing Comments
 
 ```bash
-# Fetch comments
-gh api repos/$REPO/pulls/$PR/comments | jq '.[] | {id, path, body}' | head -50
+# Fetch all review comments with file locations
+gh api repos/$REPO/pulls/$PR/comments | jq '.[] | {id, path, line, body: .body[0:100]}'
 
-# Reply to a comment
+# Fetch unresolved comment threads
+gh api repos/$REPO/pulls/$PR/comments | jq '[.[] | select(.in_reply_to_id == null)] | .[] | {id, path, line, body: .body[0:100]}'
+
+# Reply to a specific comment (threaded reply)
 gh api repos/$REPO/pulls/$PR/comments \
-  --input - <<< '{"body": "Fixed in abc123.", "in_reply_to": COMMENT_ID}'
+  --method POST \
+  -f body="Fixed in abc123." \
+  -F in_reply_to=COMMENT_ID
 ```
 
 **Reply Templates** (keep professional, no emojis):
@@ -116,6 +251,52 @@ gh api repos/$REPO/pulls/$PR/comments \
 | By design | `By design: [explanation of intent]`                     |
 | Deferred  | `Deferred to #[issue]. Will address in [timeframe].`     |
 | Disagree  | `Let's discuss: [your perspective]. [specific question]` |
+
+## Complete Review Workflow
+
+Follow these steps to review a PR with inline comments:
+
+```bash
+# 1. Set up variables
+PR=$(gh pr view --json number -q '.number')
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+COMMIT_SHA=$(gh api repos/$REPO/pulls/$PR --jq '.head.sha')
+
+# 2. Get list of changed files
+gh pr diff $PR --name-only
+
+# 3. Review each file's diff to find line numbers
+gh pr diff $PR -- <file-path>
+# Look at @@ headers to determine line numbers:
+# @@ -10,5 +10,8 @@ means changes start at line 10 in the new file
+
+# 4. For each issue found, post an inline comment
+gh api repos/$REPO/pulls/$PR/comments \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  -f path="<file-path>" \
+  -F line=<line-number> \
+  -f side="RIGHT" \
+  -f body="**[severity]** <description of issue and suggested fix>"
+
+# 5. After reviewing all files, submit the overall review
+gh api repos/$REPO/pulls/$PR/reviews \
+  --method POST \
+  -f commit_id="$COMMIT_SHA" \
+  -f body="## Summary
+<your overall assessment based on the actual changes>
+
+## Required Changes
+- <list the blocking issues you found>
+
+Please address before merging." \
+  -f event="REQUEST_CHANGES"
+```
+
+**Notes:**
+- You cannot use `REQUEST_CHANGES` on your own PR - use `COMMENT` instead
+- Always base your comments on the actual code in the diff, not hypothetical issues
+- Use the severity labels consistently: `[blocking]`, `[important]`, `[suggestion]`, `[nit]`, `[question]`, `[praise]`
 
 ## Expert Decision Trees
 
