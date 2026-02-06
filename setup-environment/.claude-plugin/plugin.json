@@ -1,9 +1,12 @@
 {
   "name": "setup-environment",
-  "description": "Plugin for setting up development environments",
+  "description": "Safe, observable environment setup with security guardrails, session lifecycle logging, and knowledge synchronization.",
   "version": "0.0.1",
   "author": {
     "name": "Hans Eilers"
   },
-  "hooks": "./hooks.json"
+  "hooks": "./hooks.json",
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "commands": "./commands/"
 }

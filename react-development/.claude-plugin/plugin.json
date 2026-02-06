@@ -1,9 +1,11 @@
 {
   "name": "react-development",
-  "description": "Plugin with tools for enhancing react development",
+  "description": "Automated React/Next.js code quality with 57 best practice rules, ESLint, Prettier, TypeScript checking, and Language Server Protocol support.",
   "version": "0.0.1",
   "author": {
     "name": "Hans Eilers"
   },
-  "hooks": "./hooks.json"
+  "hooks": "./hooks.json",
+  "skills": "./skills/",
+  "lspServers": "./.lsp.json"
 }

@@ -1,6 +1,6 @@
 ---
 name: react-best-practices
-description: React and Next.js performance optimization guidelines from Vercel Engineering. Contains 57 rules for automated refactoring and code generation. Invoke this skill manually when you need guidance on React/Next.js best practices, performance optimization, or code review.
+description: React and Next.js performance optimization guidelines from Vercel Engineering. Contains 57 rules across 8 categories. Use when writing React components, implementing data fetching, reviewing for performance issues, refactoring React/Next.js code, or optimizing bundle size.
 license: MIT
 metadata:
   author: vercel
@@ -10,17 +10,6 @@ metadata:
 # Vercel React Best Practices
 
 Comprehensive performance optimization guide for React and Next.js applications, maintained by Vercel. Contains 57 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.
-
-## How to Activate
-
-This skill must be **invoked manually** by the user or agent. It does not automatically trigger.
-
-Invoke this skill when:
-- Writing new React components or Next.js pages
-- Implementing data fetching (client or server-side)
-- Reviewing code for performance issues
-- Refactoring existing React/Next.js code
-- Optimizing bundle size or load times
 
 ## Loading Rules
 

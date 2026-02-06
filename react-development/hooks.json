@@ -1,27 +1,39 @@
 {
+  "description": "React development quality hooks: auto-linting, formatting, and type checking on file changes.",
   "hooks": {
     "OnPluginInstall": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
-        "description": "Install and verify required dependencies (prettier, typescript, eslint)"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
+            "timeout": 120,
+            "statusMessage": "Installing React development dependencies..."
+          }
+        ]
       }
     ],
     "OnPluginUninstall": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/uninstall.sh",
-        "description": "Remove global npm packages and configuration files"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/uninstall.sh",
+            "timeout": 60,
+            "statusMessage": "Removing React development dependencies..."
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "(Write|Edit|MultiEdit) && file_path =~ /\\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/",
+        "matcher": "(Write|Edit) && file_path =~ /\\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/",
         "hooks": [
           {
             "type": "command",
             "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/quality-check.js",
-            "description": "Run unified quality checks: TypeScript compilation, ESLint, Prettier, and React patterns"
+            "timeout": 30,
+            "statusMessage": "Running quality checks..."
           }
         ]
       }

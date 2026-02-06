@@ -26,17 +26,28 @@ Three hook types are available, each with different capabilities:
 ### Hook Events Lifecycle
 
 ```
-SessionStart → UserPromptSubmit → PreToolUse → PostToolUse → Stop
-                                     ↓
-                              PostToolUseFailure
+SessionStart → UserPromptSubmit → PreToolUse → PostToolUse → Stop → SessionEnd
+                                     ↓              ↓
+                              PermissionRequest  PostToolUseFailure
 
+SubagentStart → SubagentStop (parallel to main flow)
+Notification (fires on permission_prompt, idle_prompt, auth_success, elicitation_dialog)
 PreCompact (triggered by context window filling or /compact)
 ```
 
-Key events:
-- `PreCompact` - Before context compaction (backup opportunity)
-- `Stop` - After Claude finishes responding (not on user interrupts)
-- `SessionStart` - Has `source` field: "startup", "resume", or "compact"
+Key events and matchers:
+- `SessionStart` - Matchers: `startup`, `resume`, `clear`, `compact`
+- `SessionEnd` - Matchers: `clear`, `logout`, `prompt_input_exit`, `bypass_permissions_disabled`, `other`
+- `UserPromptSubmit` - No matcher support
+- `PreToolUse` - Matcher: tool name (e.g., `Bash`, `Read|Write|Edit`)
+- `PostToolUse` - Matcher: tool name
+- `PostToolUseFailure` - Matcher: tool name
+- `PermissionRequest` - Matcher: tool name
+- `Notification` - Matcher: notification type (`permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`)
+- `SubagentStart` - Matcher: agent type
+- `SubagentStop` - Matcher: agent type
+- `Stop` - No matcher support. Fires after Claude finishes responding (not on user interrupts)
+- `PreCompact` - Matchers: `manual`, `auto`
 
 ### Hook Input/Output
 
@@ -45,7 +56,9 @@ All hooks receive JSON on stdin with common fields:
 {
   "session_id": "abc123",
   "transcript_path": "/path/to/transcript.jsonl",
-  "cwd": "/project/root"
+  "cwd": "/project/root",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse"
 }
 ```
 
@@ -54,15 +67,28 @@ For `prompt`/`agent` hooks, use `$ARGUMENTS` to inject the input JSON:
 {
   "type": "agent",
   "prompt": "Analyze this: $ARGUMENTS",
-  "model": "haiku"
+  "model": "haiku",
+  "timeout": 120
 }
 ```
 
+### Hook Handler Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `type` | string | required | `command`, `prompt`, or `agent` |
+| `command`/`prompt` | string | required | Script path or prompt text |
+| `model` | string | - | Model for prompt/agent hooks (`haiku`, `sonnet`, `opus`) |
+| `timeout` | number | 120 | Max execution time in seconds |
+| `statusMessage` | string | - | Message shown to user while hook runs |
+| `async` | boolean | false | Run without blocking Claude's response |
+| `once` | boolean | false | Run only once per session |
+
 ### Exit Codes
 
-- `0` - Success, allow action
-- `2` - Block action, send stderr as feedback
-- Other - Non-blocking error
+- `0` - Success, parse stdout for JSON output
+- `2` - Block action (for PreToolUse, PermissionRequest, UserPromptSubmit, Stop, SubagentStop)
+- Other - Non-blocking error, stderr shown in verbose mode
 
 ---
 
@@ -125,3 +151,6 @@ if __name__ == '__main__':
 
 - `${CLAUDE_PLUGIN_ROOT}` - Plugin installation directory (use in hooks.json)
 - `$CLAUDE_PROJECT_DIR` - Current project directory
+- `$CLAUDE_SESSION_ID` - Current session identifier
+- `$CLAUDE_ENV_FILE` - File to persist env vars (SessionStart only, write `KEY=value` lines)
+- `$CLAUDE_CODE_REMOTE` - `"true"` when running in remote/web environments
