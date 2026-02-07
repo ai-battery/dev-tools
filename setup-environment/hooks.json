@@ -1,5 +1,4 @@
 {
-  "description": "Session lifecycle hooks for environment setup, security guardrails, audit logging, and knowledge synchronization.",
   "hooks": {
     "SessionStart": [
       {

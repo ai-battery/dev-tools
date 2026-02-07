@@ -1,114 +1,103 @@
 # Setup Environment Plugin
 
-A Claude Code plugin for safe, observable environment setup and session lifecycle logging.
+A Claude Code plugin for safe, observable environment setup, session lifecycle logging, and knowledge synchronization.
 
 ## What It Does
 
-- Blocks risky operations like destructive `rm -rf` and `.env` access via plugin hooks
-- Logs tool usage to `logs/*.json` for auditability
-- Provides optional native hooks for session lifecycle, notifications, and knowledge sync
+- Blocks risky operations like destructive `rm -rf` and `.env` access
+- Logs tool usage and session events to `logs/*.json` for auditability
+- Syncs conversation learnings to agent.md files and decisions.md on PreCompact and Stop events
+- Provides TTS notifications (optional, requires API keys)
 
 ## Structure
 
-- `./.claude-plugin/plugin.json` - plugin manifest
-- `./hooks.json` - plugin hook wiring (PreToolUse, PostToolUse, PostToolUseFailure only)
-- `./hooks/` - hook scripts
-- `./hooks/_shared.py` - shared JSON + logging helpers
-- `./hooks/_security.py` - safety checks for tool use
-- `./hooks/tests/` - lightweight unit tests
+```
+setup-environment/
+├── .claude-plugin/
+│   └── plugin.json          # Plugin manifest
+├── hooks.json               # Hook configuration
+├── hooks/                   # Hook scripts
+│   ├── _shared.py           # Shared JSON + logging helpers
+│   ├── _security.py         # Safety checks for tool use
+│   ├── session_start.py     # Load development context
+│   ├── session_end.py       # Cleanup and logging
+│   ├── user_prompt_submit.py # Prompt logging
+│   ├── pre_tool_use.py      # Security guardrails
+│   ├── post_tool_use.py     # Tool audit logging
+│   ├── post_tool_use_failure.py # Error logging
+│   ├── permission_request.py # Permission audit
+│   ├── notification.py      # TTS notifications
+│   ├── pre_compact.py       # Transcript backup
+│   ├── subagent_start.py    # Subagent spawn logging
+│   ├── subagent_stop.py     # Subagent completion logging
+│   ├── stop.py              # Session finalization
+│   └── tests/               # Unit tests
+└── skills/
+    └── pr-review/           # PR review skill
+        └── SKILL.md
+```
 
 ## Installation
-
-Use Claude Code's plugin installation flow:
 
 ```bash
 claude plugin install
 ```
 
-## Plugin Hooks (Automatic)
+Then select the setup-environment plugin from the list.
 
-These hooks are automatically active when the plugin is installed:
+## Hooks
 
-| Hook | Purpose |
-|------|---------|
-| `PreToolUse` | Safety guardrails for `.env` and destructive `rm` commands |
-| `PostToolUse` | Audit successful tool usage |
-| `PostToolUseFailure` | Log tool failures with error details |
-
-## Native Hooks (Optional)
-
-The following hooks require manual configuration in your Claude Code settings. Add them to `~/.claude/settings.json` or `~/.claude/settings.local.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "type": "command",
-        "command": "/path/to/dev-tools/setup-environment/hooks/session_start.py --load-context"
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "type": "command",
-        "command": "/path/to/dev-tools/setup-environment/hooks/user_prompt_submit.py --store-last-prompt"
-      }
-    ],
-    "Stop": [
-      {
-        "type": "command",
-        "command": "/path/to/dev-tools/setup-environment/hooks/stop.py"
-      }
-    ],
-    "PreCompact": [
-      {
-        "type": "command",
-        "command": "/path/to/dev-tools/setup-environment/hooks/pre_compact.py --backup"
-      }
-    ],
-    "Notification": [
-      {
-        "type": "command",
-        "command": "/path/to/dev-tools/setup-environment/hooks/notification.py"
-      }
-    ]
-  }
-}
-```
-
-Replace `/path/to/dev-tools` with the actual path to your dev-tools directory.
-
-### Native Hook Descriptions
-
-| Hook | Purpose |
-|------|---------|
-| `SessionStart` | Load development context (git status, TODO files) at session start |
+| Event | Purpose |
+|-------|---------|
+| `SessionStart` | Load development context (git status, TODO files) |
+| `SessionEnd` | Cleanup and session-end logging |
 | `UserPromptSubmit` | Log user prompts and manage session data |
-| `Stop` | Log session stop events, optional TTS notifications |
-| `PreCompact` | Backup transcripts before context compaction |
-| `Notification` | Log notifications when agent needs user input |
+| `PreToolUse` | Block dangerous rm -rf commands and .env file access |
+| `PostToolUse` | Audit all tool usage |
+| `PostToolUseFailure` | Log tool failures with error details |
+| `PermissionRequest` | Log permission requests for auditing |
+| `Notification` | TTS notifications when agent needs user input |
+| `PreCompact` | Backup transcript, sync knowledge to documentation |
+| `SubagentStart` | Log subagent spawn events |
+| `SubagentStop` | Log subagent completion events |
+| `Stop` | Finalize session, sync knowledge to documentation |
 
-### Knowledge Synchronization (Advanced)
+### Knowledge Synchronization
 
-For automatic knowledge sync on `PreCompact` and `Stop` events, you can add agent-type hooks that update your project documentation. See the hook scripts for the full agent prompt configuration.
+The `PreCompact` and `Stop` hooks include an agent-type hook that automatically:
+
+1. **Updates agent.md files** - Analyzes conversation for new patterns, corrections, capabilities, or conventions to add to `.claude/agents/`
+
+2. **Maintains decisions.md** - Creates/updates `.claude/decisions.md` with a decision log including timestamps, context, decisions, and rationale
+
+## Skills
+
+### pr-review
+
+Expert code review skill for pull requests. Provides:
+- GitHub CLI workflows for inline comments
+- Severity classification ([blocking], [important], [suggestion], [nit], [question], [praise])
+- Decision trees for approval vs request changes
+- Complete review workflow with examples
+
+Invoke with `/setup-environment:pr-review` or let Claude use it automatically when reviewing PRs.
 
 ## Configuration
 
-These environment variables are optional and unlock extra features:
+Optional environment variables for extra features:
 
-- `OPENAI_API_KEY` - use OpenAI for TTS or completion messages
-- `ANTHROPIC_API_KEY` - use Anthropic for completion messages
-- `ELEVENLABS_API_KEY` - use ElevenLabs TTS
-- `ENGINEER_NAME` - personalize notification prompts
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | OpenAI TTS or completions |
+| `ANTHROPIC_API_KEY` | Anthropic completions |
+| `ELEVENLABS_API_KEY` | ElevenLabs TTS |
+| `ENGINEER_NAME` | Personalize notification prompts |
 
 ## Logs
 
-All hook logs are written to `logs/*.json` in the current working directory.
-Each log is a JSON array of hook event payloads.
+All hook logs are written to `logs/*.json` in the current working directory. Each log is a JSON array of hook event payloads.
 
 ## Tests
-
-Run basic safety tests:
 
 ```bash
 python -m unittest discover -s hooks/tests -p "test_*.py"
