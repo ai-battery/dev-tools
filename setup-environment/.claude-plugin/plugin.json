@@ -1,12 +1,10 @@
 {
   "name": "setup-environment",
   "description": "Safe, observable environment setup with security guardrails, session lifecycle logging, and knowledge synchronization.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": {
     "name": "Hans Eilers"
   },
   "hooks": "./hooks.json",
-  "skills": "./skills/",
-  "agents": "./agents/",
-  "commands": "./commands/"
+  "skills": "./skills/"
 }
