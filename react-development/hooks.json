@@ -1,29 +1,5 @@
 {
   "hooks": {
-    "OnPluginInstall": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh",
-            "timeout": 120,
-            "statusMessage": "Installing React development dependencies..."
-          }
-        ]
-      }
-    ],
-    "OnPluginUninstall": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/uninstall.sh",
-            "timeout": 60,
-            "statusMessage": "Removing React development dependencies..."
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "(Write|Edit) && file_path =~ /\\.(ts|tsx|js|jsx|mts|cts|mjs|cjs)$/",
